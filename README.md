@@ -41,10 +41,14 @@ python setup.py develop
 
 ## TroubleShooting
 - If there is an error in setup.py, modify the PyYAML line (Reference: https://github.com/cliport/cliport/issues/32). The file could be found in site-packages of created conda environment (/home/max/miniconda3/envs/cliport/lib/python3.8/site-packages/omegaconf-2.0.6.dist-info && /home/max/miniconda3/envs/cliport/lib/python3.8/site-packages/pytorch_lightning-1.7.0.dist-info).
-- pip install protobuf==3.20.*
-- pip install numpy==1.22.4
-- pip install transformers==4.6
-- conda install pytorch==1.13.0 torchvision==0.14.0 torchaudio==0.13.0 pytorch-cuda=11.7 -c pytorch -c nvidia
+```
+pip install torch==1.7.1+cu110 torchvision==0.8.2+cu110 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
+pip install pytorch_lightning==1.0.3
+
+pip install protobuf==3.20.*
+pip install numpy==1.22.4
+pip install transformers==4.6
+```
 
 **Note**: You might need versions of `torch==1.7.1` and `torchvision==0.8.2` that are compatible with your CUDA and hardware. 
 
