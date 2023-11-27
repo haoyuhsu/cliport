@@ -41,6 +41,9 @@ from cliport.tasks.towers_of_hanoi_seq import TowersOfHanoiSeqSeenColors
 from cliport.tasks.towers_of_hanoi_seq import TowersOfHanoiSeqUnseenColors
 from cliport.tasks.towers_of_hanoi_seq import TowersOfHanoiSeqFull
 
+from cliport.tasks.stack_block_pyramid import StackingTowers
+from cliport.tasks.packing_boxes import StackingBoxes
+
 names = {
     # demo conditioned
     'align-box-corner': AlignBoxCorner,
@@ -84,4 +87,6 @@ names = {
     'towers-of-hanoi-seq-seen-colors': TowersOfHanoiSeqSeenColors,
     'towers-of-hanoi-seq-unseen-colors': TowersOfHanoiSeqUnseenColors,
     'towers-of-hanoi-seq-full': TowersOfHanoiSeqFull,
+    'stack-boxes': StackingBoxes,          # our project task
+    'stack-towers': StackingTowers,        # our project task
 }

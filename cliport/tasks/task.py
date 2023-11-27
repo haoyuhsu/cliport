@@ -110,6 +110,11 @@ class Task():
             # Filter out matched objects.
             order = [i for i in order if nn_dists[i] > 0]
 
+            ########################################
+            # do not prioritize farthest from nearest neighbor, follow the order of 'objs'
+            ########################################
+            order = [i for i in range(len(objs)) if i in order]
+
             pick_mask = None
             for pick_i in order:
                 pick_mask = np.uint8(obj_mask == objs[pick_i][0])
@@ -258,6 +263,12 @@ class Task():
         diff_pos = np.float32(pose0[0][:2]) - np.float32(pose1[0][:2])
         dist_pos = np.linalg.norm(diff_pos)
 
+        ########################################
+        # consider height error
+        diff_height = np.float32(pose0[0][2]) - np.float32(pose1[0][2])
+        dist_height = np.abs(diff_height)
+        ########################################
+
         # Get rotational error around z-axis (account for symmetries).
         diff_rot = 0
         if symmetry > 0:
@@ -267,7 +278,7 @@ class Task():
             if diff_rot > (symmetry / 2):
                 diff_rot = symmetry - diff_rot
 
-        return (dist_pos < self.pos_eps) and (diff_rot < self.rot_eps)
+        return (dist_pos < self.pos_eps) and (diff_rot < self.rot_eps) and (dist_height < self.pos_eps)
 
     def get_true_image(self, env):
         """Get RGB-D orthographic heightmaps and segmentation masks."""
@@ -288,7 +299,10 @@ class Task():
         mask = np.int32(cmaps)[0, Ellipsis, 3:].squeeze()
         return cmap, hmap, mask
 
-    def get_random_pose(self, env, obj_size):
+    ################################################################
+    # Add constraint to restrict the sampling space of object pose #
+    ################################################################
+    def get_random_pose(self, env, obj_size, constraints = False):
         """Get random collision-free object pose within workspace bounds."""
 
         # Get erosion size of object in pixels.
@@ -299,6 +313,14 @@ class Task():
 
         # Randomly sample an object pose within free-space pixels.
         free = np.ones(obj_mask.shape, dtype=np.uint8)
+
+        ########################################
+        # for 'stacking-boxes' task, we need to avoid sampling on the right side of the table
+        if constraints:
+            # free image is 320x160
+            free[160:, :] = 0
+        ########################################
+
         for obj_ids in env.obj_ids.values():
             for obj_id in obj_ids:
                 free[obj_mask == obj_id] = 0

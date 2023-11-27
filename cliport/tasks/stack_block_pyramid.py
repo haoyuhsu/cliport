@@ -65,3 +65,58 @@ class StackBlockPyramid(Task):
                            False, True, 'pose', None, 1 / 6))
         self.lang_goals.append(self.lang_template.format(blocks="the red block",
                                                          row="top"))
+
+
+class StackingTowers(Task):
+    """Stacking task."""
+
+    def __init__(self):
+        super().__init__()
+        self.max_steps = 6
+        self.lang_template = "make the tower with {blocks}"
+        self.task_completed_desc = "done stacking block tower."
+        self.n_blocks = 5
+
+    def reset(self, env):
+        super().reset(env)
+
+        # Add base.
+        base_size = (0.05, 0.05, 0.005)
+        base_urdf = 'stacking/single_stand.urdf'
+        base_pose = self.get_random_pose(env, base_size)
+        env.add_object(base_urdf, base_pose, 'fixed')
+
+        # Block colors.
+        colors = [utils.COLORS[c] for c in utils.COLORS if c != 'brown']
+        colors_names = [c for c in utils.COLORS]
+
+        # Random shuffle colors & colors_names, make them aligned
+        perm = np.random.permutation(len(colors))
+        shuffled_colors = [colors[i] for i in perm]
+        shuffled_colors_names = [colors_names[i] for i in perm]
+        colors = shuffled_colors
+        colors_names = shuffled_colors_names
+
+        # Add blocks.
+        objs = []
+        # sym = np.pi / 2
+        block_size = (0.04, 0.04, 0.04)
+        block_urdf = 'stacking/block.urdf'
+        for i in range(self.n_blocks):
+            block_pose = self.get_random_pose(env, block_size)
+            block_id = env.add_object(block_urdf, block_pose)
+            p.changeVisualShape(block_id, -1, rgbaColor=colors[i] + [1])
+            objs.append((block_id, (np.pi / 2, None)))
+
+        # Associate placement locations for goals.
+        place_pos = [(0, 0, 0.03), (0, 0, 0.07),
+                    (0, 0, 0.11), (0, 0, 0.15),
+                    (0, 0, 0.19), (0, 0, 0.23)]
+        targs = [(utils.apply(base_pose, i), base_pose[1]) for i in place_pos]
+
+        # Goal: blocks are stacked in a tower in arbitrary order.
+        self.goals.append((objs, np.ones((6, 6)), targs,
+                        False, True, 'pose', None, 1))
+        self.lang_goals.append(self.lang_template.format(
+            blocks=", ".join(colors_names[:self.n_blocks]) + " blocks")
+        )

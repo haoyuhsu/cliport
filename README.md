@@ -35,11 +35,13 @@ pip install --upgrade pip
 cd cliport
 pip install -r requirements.txt
 
-export CLIPORT_ROOT=$(pwd)
+export CLIPORT_ROOT=$(pwd)  # remember to run this on remote server
 python setup.py develop
+
+module load gcc/12.2.0  # remember to load gcc on remote server
 ```
 
-## TroubleShooting
+## TroubleShooting on environmental setup
 - If there is an error in setup.py, modify the PyYAML line (Reference: https://github.com/cliport/cliport/issues/32). The file could be found in site-packages of created conda environment (/home/max/miniconda3/envs/cliport/lib/python3.8/site-packages/omegaconf-2.0.6.dist-info && /home/max/miniconda3/envs/cliport/lib/python3.8/site-packages/pytorch_lightning-1.7.0.dist-info).
 ```
 pip install torch==1.7.1+cu110 torchvision==0.8.2+cu110 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
