@@ -365,11 +365,11 @@ def preprocess(img, dist='transporter'):
         # normalize
         img = img.clone()
         img[:, :3, :, :] = ((img[:, :3, :, :] / 255 - color_mean) / color_std)
-        img[:, 3:, :, :] = ((img[:, 3:, :, :] - depth_mean) / depth_std)
+        img[:, 3:6, :, :] = ((img[:, 3:6, :, :] - depth_mean) / depth_std)
     else:
         # normalize
         img[:, :, :3] = (img[:, :, :3] / 255 - color_mean) / color_std
-        img[:, :, 3:] = (img[:, :, 3:] - depth_mean) / depth_std
+        img[:, :, 3:6] = (img[:, :, 3:6] - depth_mean) / depth_std
 
     # if dist == 'franka' or dist == 'transporter':
     #     print(np.mean(img[:,:3,:,:].detach().cpu().numpy(), axis=(0,2,3)),
@@ -385,7 +385,7 @@ def deprocess(img):
     depth_std = 0.00903967
 
     img[:, :, :3] = np.uint8(((img[:, :, :3] * color_std) + color_mean) * 255)
-    img[:, :, 3:] = np.uint8(((img[:, :, 3:] * depth_std) + depth_mean) * 255)
+    img[:, :, 3:6] = np.uint8(((img[:, :, 3:6] * depth_std) + depth_mean) * 255)
     return img
 
 
@@ -404,6 +404,106 @@ def get_fused_heightmap(obs, configs, bounds, pix_size):
     cmap = np.uint8(np.round(cmap))
     hmap = np.max(heightmaps, axis=0)  # Max to handle occlusions.
     return cmap, hmap
+
+##############################################################################
+#  Create custom heightmap fused from multi-view feature maps with ResNet.   #
+##############################################################################
+def get_fused_feature_heightmap(obs, configs, bounds, pix_size):
+    """Reconstruct orthographic heightmaps with segmentation masks."""
+    
+    featuremaps = reconstruct_feature_heightmaps(
+        obs['color'], obs['depth'], configs, bounds, pix_size)
+    featuremaps = np.float32(featuremaps)
+
+    fmap = np.sum(featuremaps, axis=0) / float(featuremaps.shape[0])
+    return fmap
+##############################################################################
+
+##############################################################################
+def reconstruct_feature_heightmaps(color, depth, configs, bounds, pixel_size):
+    """Reconstruct top-down heightmap views from multiple 3D pointclouds."""
+    # use pretrained ResNet to extract features
+    from torchvision import transforms
+    deeplab = torch.hub.load('pytorch/vision:v0.8.0', 'deeplabv3_resnet50', pretrained=True)
+    deeplab.eval()
+    preprocess = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    color_batch = []
+    for color in color:
+        color_batch.append(preprocess(color))
+    color_batch = torch.stack(color_batch).float()  # size (N, 3, H, W)
+
+    if torch.cuda.is_available():
+        color_batch = color_batch.to('cuda')
+        deeplab.to('cuda')
+
+    with torch.no_grad():
+        tmp = deeplab.backbone.conv1(color_batch)
+        tmp = deeplab.backbone.bn1(tmp)
+        tmp = deeplab.backbone.relu(tmp)
+        tmp = deeplab.backbone.maxpool(tmp)
+        output = deeplab.backbone.layer1(tmp) # size (N, 256, H/4, W/4)
+
+    # resize to original image size using torch
+    output = torch.nn.functional.upsample(output, size=(color_batch.shape[2], color_batch.shape[3]), mode='bilinear', align_corners=True)
+    feature = output.cpu().numpy() # size (N, 256, H, W)
+    feature = np.transpose(feature, (0, 2, 3, 1)) # size (N, H, W, 256)
+
+    featuremaps = []
+    for feature, depth, config in zip(feature, depth, configs):
+        intrinsics = np.array(config['intrinsics']).reshape(3, 3)
+        xyz = get_pointcloud(depth, intrinsics)
+        position = np.array(config['position']).reshape(3, 1)
+        rotation = p.getMatrixFromQuaternion(config['rotation'])
+        rotation = np.array(rotation).reshape(3, 3)
+        transform = np.eye(4)
+        transform[:3, :] = np.hstack((rotation, position))
+        xyz = transform_pointcloud(xyz, transform)
+        featuremap = get_feature_heightmap(xyz, feature, bounds, pixel_size)
+        featuremaps.append(featuremap)
+    return featuremaps
+##############################################################################
+
+##############################################################################
+def get_feature_heightmap(points, features, bounds, pixel_size):
+    """Get top-down (z-axis) orthographic heightmap image from 3D pointcloud.
+  
+    Args:
+      points: HxWx3 float array of 3D points in world coordinates.
+      features: HxWx256 float32 array of feature values.
+      bounds: 3x2 float array of values (rows: X,Y,Z; columns: min,max) defining
+        region in 3D space to generate heightmap in world coordinates.
+      pixel_size: float defining size of each pixel in meters.
+  
+    Returns:
+      colormap: HxWx256 float32 array of backprojected features aligned with heightmap.
+    """
+    width = int(np.round((bounds[0, 1] - bounds[0, 0]) / pixel_size))
+    height = int(np.round((bounds[1, 1] - bounds[1, 0]) / pixel_size))
+    featuremap = np.zeros((height, width, features.shape[-1]), dtype=np.float32)
+
+    # Filter out 3D points that are outside of the predefined bounds.
+    ix = (points[Ellipsis, 0] >= bounds[0, 0]) & (points[Ellipsis, 0] < bounds[0, 1])
+    iy = (points[Ellipsis, 1] >= bounds[1, 0]) & (points[Ellipsis, 1] < bounds[1, 1])
+    iz = (points[Ellipsis, 2] >= bounds[2, 0]) & (points[Ellipsis, 2] < bounds[2, 1])
+    valid = ix & iy & iz
+    points = points[valid]
+    features = features[valid]
+
+    # Sort 3D points by z-value, which works with array assignment to simulate
+    # z-buffering for rendering the heightmap image.
+    iz = np.argsort(points[:, -1])
+    points, features = points[iz], features[iz]
+    px = np.int32(np.floor((points[:, 0] - bounds[0, 0]) / pixel_size))
+    py = np.int32(np.floor((points[:, 1] - bounds[1, 0]) / pixel_size))
+    px = np.clip(px, 0, width - 1)
+    py = np.clip(py, 0, height - 1)
+    for c in range(features.shape[-1]):
+        featuremap[py, px, c] = features[:, c]
+    return featuremap
+##############################################################################
 
 
 def get_image_transform(theta, trans, pivot=(0, 0)):

@@ -33,7 +33,10 @@ class TransporterAgent(LightningModule):
         self.n_rotations = cfg['train']['n_rotations']
 
         self.pix_size = 0.003125
-        self.in_shape = (320, 160, 6)
+        if cfg['dataset']['feature_maps']:
+            self.in_shape = (320, 160, 6 + 256)
+        else:
+            self.in_shape = (320, 160, 6)
         self.cam_config = cameras.RealSenseD415.CONFIG
         self.bounds = np.array([[0.25, 0.75], [-0.5, 0.5], [0, 0.28]])
 
