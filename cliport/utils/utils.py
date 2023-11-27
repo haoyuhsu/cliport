@@ -20,6 +20,14 @@ from omegaconf import OmegaConf
 import os
 import torch
 
+##############################################################################
+from torchvision import transforms
+deeplab = torch.hub.load('pytorch/vision:v0.8.0', 'deeplabv3_resnet50', pretrained=True)
+deeplab.eval()
+if torch.cuda.is_available():
+    deeplab.to('cuda')
+##############################################################################
+
 
 # -----------------------------------------------------------------------------
 # HEIGHTMAP UTILS
@@ -423,13 +431,11 @@ def get_fused_feature_heightmap(obs, configs, bounds, pix_size):
 def reconstruct_feature_heightmaps(color, depth, configs, bounds, pixel_size):
     """Reconstruct top-down heightmap views from multiple 3D pointclouds."""
     # use pretrained ResNet to extract features
-    from torchvision import transforms
-    deeplab = torch.hub.load('pytorch/vision:v0.8.0', 'deeplabv3_resnet50', pretrained=True)
-    deeplab.eval()
     preprocess = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
+
     color_batch = []
     for color in color:
         color_batch.append(preprocess(color))
@@ -437,7 +443,6 @@ def reconstruct_feature_heightmaps(color, depth, configs, bounds, pixel_size):
 
     if torch.cuda.is_available():
         color_batch = color_batch.to('cuda')
-        deeplab.to('cuda')
 
     with torch.no_grad():
         tmp = deeplab.backbone.conv1(color_batch)
@@ -448,8 +453,9 @@ def reconstruct_feature_heightmaps(color, depth, configs, bounds, pixel_size):
 
     # resize to original image size using torch
     output = torch.nn.functional.upsample(output, size=(color_batch.shape[2], color_batch.shape[3]), mode='bilinear', align_corners=True)
-    feature = output.cpu().numpy() # size (N, 256, H, W)
-    feature = np.transpose(feature, (0, 2, 3, 1)) # size (N, H, W, 256)
+    feature = output.permute(0, 2, 3, 1) # size (N, H, W, 256)
+    # feature = output.cpu().numpy() # size (N, 256, H, W)
+    # feature = np.transpose(feature, (0, 2, 3, 1)) # size (N, H, W, 256)
 
     featuremaps = []
     for feature, depth, config in zip(feature, depth, configs):
@@ -461,9 +467,57 @@ def reconstruct_feature_heightmaps(color, depth, configs, bounds, pixel_size):
         transform = np.eye(4)
         transform[:3, :] = np.hstack((rotation, position))
         xyz = transform_pointcloud(xyz, transform)
-        featuremap = get_feature_heightmap(xyz, feature, bounds, pixel_size)
+        # import time
+        # start = time.time()
+        featuremap = get_feature_heightmap_gpu(xyz, feature, bounds, pixel_size)
+        # end = time.time()
+        # print('get_feature_heightmap time: ', end - start)
         featuremaps.append(featuremap)
     return featuremaps
+##############################################################################
+
+##############################################################################
+def get_feature_heightmap_gpu(points, features, bounds, pixel_size):
+    """Get top-down (z-axis) orthographic heightmap image from 3D pointcloud via GPU.
+  
+    Args:
+      points: HxWx3 float array of 3D points in world coordinates.
+      features: HxWx256 float32 array of feature values.
+      bounds: 3x2 float array of values (rows: X,Y,Z; columns: min,max) defining
+        region in 3D space to generate heightmap in world coordinates.
+      pixel_size: float defining size of each pixel in meters.
+  
+    Returns:
+      colormap: HxWx256 float32 array of backprojected features aligned with heightmap.
+    """
+    points = torch.from_numpy(points).float().cuda()
+    # features = torch.from_numpy(features).float().cuda() # features are already torch tensor in cuda
+    bounds = torch.from_numpy(bounds).float().cuda()
+
+    width = int(torch.round((bounds[0, 1] - bounds[0, 0]) / pixel_size))
+    height = int(torch.round((bounds[1, 1] - bounds[1, 0]) / pixel_size))
+    featuremap = torch.zeros((height, width, features.shape[-1]), dtype=torch.float32).cuda()
+
+    # Filter out 3D points that are outside of the predefined bounds.
+    ix = (points[Ellipsis, 0] >= bounds[0, 0]) & (points[Ellipsis, 0] < bounds[0, 1])
+    iy = (points[Ellipsis, 1] >= bounds[1, 0]) & (points[Ellipsis, 1] < bounds[1, 1])
+    iz = (points[Ellipsis, 2] >= bounds[2, 0]) & (points[Ellipsis, 2] < bounds[2, 1])
+    valid = ix & iy & iz
+    points = points[valid]
+    features = features[valid]
+
+    # Sort 3D points by z-value, which works with array assignment to simulate
+    # z-buffering for rendering the heightmap image.
+    iz = torch.argsort(points[:, -1])
+    points, features = points[iz], features[iz]
+    px = torch.floor((points[:, 0] - bounds[0, 0]) / pixel_size).long()
+    py = torch.floor((points[:, 1] - bounds[1, 0]) / pixel_size).long()
+    px = torch.clamp(px, 0, width - 1)
+    py = torch.clamp(py, 0, height - 1)
+
+    featuremap[py, px, :] = features
+
+    return featuremap.cpu().numpy()
 ##############################################################################
 
 ##############################################################################

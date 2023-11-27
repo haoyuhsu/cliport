@@ -1,5 +1,5 @@
 # train transporter on stack-boxes
-# Notes: original image_goal_transporter works well (w/o feature maps)
+# Notes: original image_goal_transporter works well (w/o feature maps and w/ feature maps)
 python cliport/train.py \
     train.task=stack-boxes \
     train.agent=image_goal_transporter \
