@@ -88,7 +88,7 @@ class StackingTowers(Task):
 
         # Block colors.
         colors = [utils.COLORS[c] for c in utils.COLORS if c != 'brown']
-        colors_names = [c for c in utils.COLORS]
+        colors_names = [c for c in utils.COLORS if c != 'brown']  # bug fixed
 
         # Random shuffle colors & colors_names, make them aligned
         perm = np.random.permutation(len(colors))
@@ -112,11 +112,14 @@ class StackingTowers(Task):
         place_pos = [(0, 0, 0.03), (0, 0, 0.07),
                     (0, 0, 0.11), (0, 0, 0.15),
                     (0, 0, 0.19), (0, 0, 0.23)]
+        place_pos = place_pos[:self.n_blocks]
         targs = [(utils.apply(base_pose, i), base_pose[1]) for i in place_pos]
 
         # Goal: blocks are stacked in a tower in arbitrary order.
-        self.goals.append((objs, np.ones((6, 6)), targs,
-                        False, True, 'pose', None, 1))
+        # self.goals.append((objs, np.ones((self.n_blocks, self.n_blocks)), targs,  # TODO: this should be np.eye(6)
+        #                 False, True, 'pose', None, 1))
+        self.goals.append((objs, np.eye(self.n_blocks), targs,
+                           False, True, 'pose', None, 1))
         self.lang_goals.append(self.lang_template.format(
             blocks=", ".join(colors_names[:self.n_blocks]) + " blocks")
         )

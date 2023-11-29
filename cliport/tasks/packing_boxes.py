@@ -272,7 +272,8 @@ class StackingBoxes(Task):
         # self.max_steps = len(self.goal['steps']) * 2
 
         true_ids.reverse()
-        true_ids = [(box_id, (0, None)) for box_id in true_ids]
+        # true_ids = [(box_id, (0, None)) for box_id in true_ids]  # TODO: symmetry should be np.pi instead of 0
+        true_ids = [(box_id, (np.pi, None)) for box_id in true_ids]  # TODO: symmetry should be np.pi instead of 0
         true_poses.reverse()
 
         # Ignore the excess boxes
@@ -287,7 +288,10 @@ class StackingBoxes(Task):
         # .    np.argsort(-1 * np.array(object_volumes))
         # ]
 
+        # self.goals.append((
+        #     true_ids, np.eye(len(true_ids)), true_poses, False, True, 'zone',  # TODO: this should be 'pose'
+        #     (object_points, [(zone_pose, zone_size)]), 1))
         self.goals.append((
-            true_ids, np.eye(len(true_ids)), true_poses, False, True, 'zone',
+            true_ids, np.eye(len(true_ids)), true_poses, False, True, 'pose',  # TODO: this should be 'pose'
             (object_points, [(zone_pose, zone_size)]), 1))
         self.lang_goals.append(self.lang_template)
