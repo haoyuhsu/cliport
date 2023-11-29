@@ -8,6 +8,7 @@ from cliport.models.core.unet import Up
 from cliport.models.core.fusion import FusionConvLat
 from cliport.models.clip_lingunet_lat import CLIPLingUNetLat
 
+from cliport.models.core.clip import build_model, load_clip, tokenize
 
 class CLIPUNetLat(CLIPLingUNetLat):
     """ CLIP RN50 with U-Net skip connections and lateral connections without language """
@@ -88,3 +89,8 @@ class CLIPUNetLat(CLIPLingUNetLat):
 
         x = F.interpolate(x, size=(in_shape[-2], in_shape[-1]), mode='bilinear')
         return x
+    
+    def _load_clip(self):
+        model, _ = load_clip("RN50", device=self.device)
+        self.clip_rn50 = build_model(model.state_dict()).to(self.device)
+        del model

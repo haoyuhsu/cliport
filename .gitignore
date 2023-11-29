@@ -143,3 +143,5 @@ dmypy.json
 .hydra/
 exps/
 data/
+
+sbatch-scripts/

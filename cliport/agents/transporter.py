@@ -506,3 +506,59 @@ class TwoStreamRN50BertUNetTransporterAgent(TransporterAgent):
             cfg=self.cfg,
             device=self.device_type,
         )
+
+from cliport.agents.transporter_image_goal import ImageGoalTransporterAgent
+from cliport.models.core.transport_image_goal import TransportImageGoalFusion, TransportImageGoalFusionLat
+from cliport.models.core.attention_image_goal import AttentionImageGoalFusion, AttentionImageGoalFusionLat
+
+class TwoStreamImageGoalLatTransporterAgent(ImageGoalTransporterAgent):
+
+    def __init__(self, name, cfg, train_ds, test_ds):
+        super().__init__(name, cfg, train_ds, test_ds)
+
+    def _build_model(self):
+        stream_one_fcn = 'plain_resnet_lat'
+        stream_two_fcn = 'plain_resnet_lat'
+        self.attention = AttentionImageGoalFusionLat(
+            stream_fcn=(stream_one_fcn, stream_two_fcn),
+            in_shape=self.in_shape,
+            n_rotations=1,
+            preprocess=utils.preprocess,
+            cfg=self.cfg,
+            device=self.device_type,
+        )
+        self.transport = TransportImageGoalFusionLat(
+            stream_fcn=(stream_one_fcn, stream_two_fcn),
+            in_shape=self.in_shape,
+            n_rotations=self.n_rotations,
+            crop_size=self.crop_size,
+            preprocess=utils.preprocess,
+            cfg=self.cfg,
+            device=self.device_type,
+        )
+
+class TwoStreamImageGoalTransporterAgent(ImageGoalTransporterAgent):
+
+    def __init__(self, name, cfg, train_ds, test_ds):
+        super().__init__(name, cfg, train_ds, test_ds)
+
+    def _build_model(self):
+        stream_one_fcn = 'plain_resnet'
+        stream_two_fcn = 'plain_resnet'
+        self.attention = AttentionImageGoalFusion(
+            stream_fcn=(stream_one_fcn, stream_two_fcn),
+            in_shape=self.in_shape,
+            n_rotations=1,
+            preprocess=utils.preprocess,
+            cfg=self.cfg,
+            device=self.device_type,
+        )
+        self.transport = TransportImageGoalFusion(
+            stream_fcn=(stream_one_fcn, stream_two_fcn),
+            in_shape=self.in_shape,
+            n_rotations=self.n_rotations,
+            crop_size=self.crop_size,
+            preprocess=utils.preprocess,
+            cfg=self.cfg,
+            device=self.device_type,
+        )

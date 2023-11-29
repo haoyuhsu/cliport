@@ -6,6 +6,9 @@ import cliport.utils.utils as utils
 
 from cliport.models.resnet import ConvBlock, IdentityBlock
 
+from cliport.models.core import fusion
+from cliport.models.core.fusion import FusionConvLat
+
 class ResNet45_10s(nn.Module):
     def __init__(self, input_shape, output_dim, cfg, device, preprocess):
         super(ResNet45_10s, self).__init__()
@@ -92,7 +95,39 @@ class ResNet45_10s(nn.Module):
                           final_relu=False, batchnorm=self.batchnorm)
         )
 
-    def forward(self, x):
+        ## Lateral connections
+        self.lat_fusion_1 = FusionConvLat(input_dim=1024, output_dim=512)
+        self.lat_fusion_2 = FusionConvLat(input_dim=512, output_dim=256)
+        self.lat_fusion_3 = FusionConvLat(input_dim=256, output_dim=128)
+        self.lat_fusion_4 = FusionConvLat(input_dim=128, output_dim=64)
+        self.lat_fusion_5 = FusionConvLat(input_dim=64, output_dim=32)
+        self.lat_fusion_network = [
+            self.lat_fusion_1,
+            self.lat_fusion_2,
+            self.lat_fusion_3,
+            self.lat_fusion_4,
+            self.lat_fusion_5
+        ]
+
+    def forward(self, x, lat=None):
+        # if lat is not None:
+        #     for l in lat:
+        #         print(l.shape)
+        # Lateral features: 
+        # torch.Size([1, 1024, 20, 20])
+        # torch.Size([1, 512, 40, 40])
+        # torch.Size([1, 256, 80, 80])
+        # torch.Size([1, 128, 160, 160])
+        # torch.Size([1, 64, 320, 320])
+        # torch.Size([1, 32, 640, 640])
+        # Decoder features:
+        # torch.Size([1, 1024, 20, 20])
+        # torch.Size([1, 512, 40, 40])
+        # torch.Size([1, 256, 80, 80])
+        # torch.Size([1, 128, 160, 160])
+        # torch.Size([1, 64, 320, 320])
+        # torch.Size([1, 32, 640, 640])
+
         x = self.preprocess(x, dist='transporter')
         in_shape = x.shape
 
@@ -102,9 +137,12 @@ class ResNet45_10s(nn.Module):
 
         # decoder
         im = []
-        for layer in [self.layer6, self.layer7, self.layer8, self.layer9, self.layer10, self.conv2]:
+        for i, layer in enumerate([self.layer6, self.layer7, self.layer8, self.layer9, self.layer10, self.conv2]):
             im.append(x)
             x = layer(x)
+            # lateral connections
+            if lat is not None and layer != self.conv2:
+                x = self.lat_fusion_network[i](x, lat[i+1])
 
         x = F.interpolate(x, size=(in_shape[-2], in_shape[-1]), mode='bilinear')
         return x, im

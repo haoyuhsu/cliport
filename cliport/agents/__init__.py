@@ -4,6 +4,8 @@ from cliport.agents.transporter import TwoStreamClipWithoutSkipsTransporterAgent
 from cliport.agents.transporter import TwoStreamRN50BertUNetTransporterAgent
 from cliport.agents.transporter import TwoStreamClipUNetTransporterAgent
 
+from cliport.agents.transporter import TwoStreamImageGoalLatTransporterAgent, TwoStreamImageGoalTransporterAgent
+
 from cliport.agents.transporter_lang_goal import TwoStreamClipLingUNetTransporterAgent
 from cliport.agents.transporter_lang_goal import TwoStreamRN50BertLingUNetTransporterAgent
 from cliport.agents.transporter_lang_goal import TwoStreamUntrainedRN50BertLingUNetTransporterAgent
@@ -50,6 +52,12 @@ names = {
          # Untrained RN50-BERT (similar to untrained CLIP)
          'two_stream_full_untrained_rn50_bert_lingunet_transporter': TwoStreamUntrainedRN50BertLingUNetTransporterAgent,
 
+         # Image-Goal Transporter with lateral connections
+         'two_stream_image_goal_transporter_lat': TwoStreamImageGoalLatTransporterAgent,   # our project use this
+
+         # Image-Goal Transporter without lateral connections
+         'two_stream_image_goal_transporter': TwoStreamImageGoalTransporterAgent,    # our project use this
+
          ###################################
          ### Single-Stream Architectures ###
          # Transporter-only
@@ -65,7 +73,7 @@ names = {
          'transporter_lang': OriginalTransporterLangFusionAgent,
 
          # Image-Goal Transporter
-         'image_goal_transporter': ImageGoalTransporterAgent,
+         'image_goal_transporter': ImageGoalTransporterAgent,  # our project use this
 
          ##############################################
          ### New variants NOT reported in the paper ###
