@@ -74,6 +74,7 @@ class Task():
             if not replace:
 
                 # Modify a copy of the match matrix.
+                # TODO: the matches do NOT care about which object belongs to which specific position (fix this)
                 matches = matches.copy()
 
                 # Ignore already matched objects.
@@ -181,11 +182,25 @@ class Task():
         # Unpack next goal step.
         objs, matches, targs, _, _, metric, params, max_reward = self.goals[0]
 
+        ##############################################################
+        ##### Hard Fix for previous bug, should delete afterward #####
+        ##############################################################
+        metric = 'pose'  # restrict to pose metric
+        ##############################################################
+
         # Evaluate by matching object poses.
         if metric == 'pose':
             step_reward = 0
             for i in range(len(objs)):
                 object_id, (symmetry, _) = objs[i]
+
+                ##############################################################
+                ##### Hard Fix for previous bug, should delete afterward #####
+                ##############################################################
+                if symmetry == 0:
+                    symmetry = np.pi   # use for stacking-boxes task, stacking-towers already has symmetry = np.pi / 2
+                ##############################################################
+
                 pose = p.getBasePositionAndOrientation(object_id)
                 targets_i = np.argwhere(matches[i, :]).reshape(-1)
                 for j in targets_i:
